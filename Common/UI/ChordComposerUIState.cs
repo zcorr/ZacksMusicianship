@@ -42,10 +42,11 @@ namespace ZacksMusicianship.Common.UI
 		private readonly bool[] selectedNotes = new bool[12];
 		private readonly UITextPanel<string>[] noteButtons = new UITextPanel<string>[12];
 
-		private UIText selectionText;
-		private UIText statusText;
-		private UIText effectText;
-		private UIText cadenceText;
+		private WrappedTextBlock selectionText;
+		private WrappedTextBlock statusText;
+		private WrappedTextBlock effectText;
+		private WrappedTextBlock cadenceText;
+		private ChordStaffPreview staffPreview;
 		private UITextPanel<string> previewButton;
 		private UITextPanel<string> commitButton;
 
@@ -54,8 +55,8 @@ namespace ZacksMusicianship.Common.UI
 			initialized = true;
 
 			UIPanel panel = new();
-			panel.Width.Set(680f, 0f);
-			panel.Height.Set(452f, 0f);
+			panel.Width.Set(700f, 0f);
+			panel.Height.Set(612f, 0f);
 			panel.HAlign = 0.5f;
 			panel.VAlign = 0.5f;
 			panel.BackgroundColor = new Color(25, 29, 43, 240);
@@ -64,13 +65,32 @@ namespace ZacksMusicianship.Common.UI
 
 			UIText title = new("Woodcord Chord Builder", 1f, true);
 			title.Left.Set(24f, 0f);
-			title.Top.Set(22f, 0f);
+			title.Top.Set(18f, 0f);
 			panel.Append(title);
 
-			UIText instructions = new("Pick exactly 3 notes. Supported chord qualities: major, minor, diminished, and sus4.", 0.85f);
+			WrappedTextBlock instructions = new("Pick exactly 3 notes. Supported chord qualities: major, minor, diminished, and sus4.", 0.85f);
+			instructions.Width.Set(648f, 0f);
+			instructions.Height.Set(34f, 0f);
 			instructions.Left.Set(24f, 0f);
-			instructions.Top.Set(58f, 0f);
+			instructions.Top.Set(56f, 0f);
+			instructions.TextColor = new Color(225, 225, 230);
 			panel.Append(instructions);
+
+			UIPanel staffPanel = new();
+			staffPanel.Width.Set(648f, 0f);
+			staffPanel.Height.Set(138f, 0f);
+			staffPanel.Left.Set(24f, 0f);
+			staffPanel.Top.Set(96f, 0f);
+			staffPanel.BackgroundColor = new Color(31, 36, 53, 220);
+			staffPanel.BorderColor = new Color(95, 82, 69);
+			panel.Append(staffPanel);
+
+			staffPreview = new ChordStaffPreview();
+			staffPreview.Width.Set(-20f, 1f);
+			staffPreview.Height.Set(-20f, 1f);
+			staffPreview.Left.Set(10f, 0f);
+			staffPreview.Top.Set(10f, 0f);
+			staffPanel.Append(staffPreview);
 
 			for (int i = 0; i < OrderedNotes.Length; i++)
 			{
@@ -82,7 +102,7 @@ namespace ZacksMusicianship.Common.UI
 				button.Width.Set(92f, 0f);
 				button.Height.Set(40f, 0f);
 				button.Left.Set(28f + col * 104f, 0f);
-				button.Top.Set(106f + row * 52f, 0f);
+				button.Top.Set(252f + row * 52f, 0f);
 				button.BackgroundColor = new Color(49, 57, 79);
 				button.BorderColor = NoteColors[i] * 0.75f;
 				button.OnLeftClick += (_, _) => ToggleNote(index);
@@ -90,31 +110,39 @@ namespace ZacksMusicianship.Common.UI
 				noteButtons[i] = button;
 			}
 
-			selectionText = new UIText("Selected notes: none", 0.95f);
+			selectionText = new WrappedTextBlock("Selected notes: none", 0.92f);
+			selectionText.Width.Set(648f, 0f);
+			selectionText.Height.Set(28f, 0f);
 			selectionText.Left.Set(24f, 0f);
-			selectionText.Top.Set(226f, 0f);
+			selectionText.Top.Set(360f, 0f);
 			panel.Append(selectionText);
 
-			statusText = new UIText("Recognized chord: none", 0.95f);
+			statusText = new WrappedTextBlock("Recognized chord: none", 0.92f);
+			statusText.Width.Set(648f, 0f);
+			statusText.Height.Set(28f, 0f);
 			statusText.Left.Set(24f, 0f);
-			statusText.Top.Set(258f, 0f);
+			statusText.Top.Set(390f, 0f);
 			panel.Append(statusText);
 
-			effectText = new UIText("Build a valid triad to arm the weapon with that chord quality.", 0.85f);
+			effectText = new WrappedTextBlock("Build a valid triad to arm the weapon with that chord quality.", 0.84f);
+			effectText.Width.Set(648f, 0f);
+			effectText.Height.Set(42f, 0f);
 			effectText.Left.Set(24f, 0f);
-			effectText.Top.Set(290f, 0f);
+			effectText.Top.Set(420f, 0f);
 			panel.Append(effectText);
 
-			cadenceText = new UIText("Cadence: 0/3", 0.82f);
+			cadenceText = new WrappedTextBlock("Cadence: 0/3", 0.8f);
+			cadenceText.Width.Set(648f, 0f);
+			cadenceText.Height.Set(46f, 0f);
 			cadenceText.Left.Set(24f, 0f);
-			cadenceText.Top.Set(318f, 0f);
+			cadenceText.Top.Set(462f, 0f);
 			panel.Append(cadenceText);
 
 			previewButton = new UITextPanel<string>("Preview Chord", 0.9f, false);
 			previewButton.Width.Set(150f, 0f);
 			previewButton.Height.Set(44f, 0f);
 			previewButton.Left.Set(24f, 0f);
-			previewButton.Top.Set(356f, 0f);
+			previewButton.Top.Set(516f, 0f);
 			previewButton.OnLeftClick += (_, _) => PreviewSelectedChord();
 			panel.Append(previewButton);
 
@@ -122,7 +150,7 @@ namespace ZacksMusicianship.Common.UI
 			commitButton.Width.Set(160f, 0f);
 			commitButton.Height.Set(44f, 0f);
 			commitButton.Left.Set(188f, 0f);
-			commitButton.Top.Set(356f, 0f);
+			commitButton.Top.Set(516f, 0f);
 			commitButton.OnLeftClick += (_, _) => CommitSelectedChord();
 			panel.Append(commitButton);
 
@@ -130,7 +158,7 @@ namespace ZacksMusicianship.Common.UI
 			clearButton.Width.Set(110f, 0f);
 			clearButton.Height.Set(44f, 0f);
 			clearButton.Left.Set(366f, 0f);
-			clearButton.Top.Set(356f, 0f);
+			clearButton.Top.Set(516f, 0f);
 			clearButton.BackgroundColor = new Color(79, 54, 54);
 			clearButton.OnLeftClick += (_, _) =>
 			{
@@ -143,14 +171,17 @@ namespace ZacksMusicianship.Common.UI
 			closeButton.Width.Set(110f, 0f);
 			closeButton.Height.Set(44f, 0f);
 			closeButton.Left.Set(492f, 0f);
-			closeButton.Top.Set(356f, 0f);
+			closeButton.Top.Set(516f, 0f);
 			closeButton.BackgroundColor = new Color(60, 64, 88);
 			closeButton.OnLeftClick += (_, _) => ChordComposerSystem.Close();
 			panel.Append(closeButton);
 
-			UIText footer = new("Right-click the weapon to reopen this builder at any time.", 0.75f);
+			WrappedTextBlock footer = new("Right-click the weapon to reopen this builder at any time.", 0.74f);
+			footer.Width.Set(648f, 0f);
+			footer.Height.Set(24f, 0f);
 			footer.Left.Set(24f, 0f);
-			footer.Top.Set(414f, 0f);
+			footer.Top.Set(568f, 0f);
+			footer.TextColor = new Color(188, 188, 198);
 			panel.Append(footer);
 
 			RefreshUi();
@@ -194,7 +225,7 @@ namespace ZacksMusicianship.Common.UI
 
 		private void RefreshUi()
 		{
-			if (!initialized || selectionText == null || statusText == null || effectText == null || cadenceText == null)
+			if (!initialized || selectionText == null || statusText == null || effectText == null || cadenceText == null || staffPreview == null)
 				return;
 
 			for (int i = 0; i < noteButtons.Length; i++)
@@ -249,6 +280,8 @@ namespace ZacksMusicianship.Common.UI
 				commitButton.SetText($"Commit {chordName}");
 				commitButton.BackgroundColor = ChordMath.GetColor(quality) * 0.5f;
 				commitButton.BorderColor = Color.White;
+
+				staffPreview.SetPreview(selectedNotes, recognized: true, root, quality);
 			}
 			else
 			{
@@ -274,6 +307,8 @@ namespace ZacksMusicianship.Common.UI
 				commitButton.SetText("Commit Chord");
 				commitButton.BackgroundColor = new Color(62, 62, 62);
 				commitButton.BorderColor = new Color(96, 96, 96);
+
+				staffPreview.SetPreview(selectedNotes, recognized: false, 0, ChordQuality.Major);
 			}
 		}
 
