@@ -1,0 +1,22 @@
+# This file will automatically update with entries for new content after a build and reload.
+
+Items: {
+	Woodcord: {
+		DisplayName: Woodcord
+		Tooltip: ""
+	}
+}
+
+Buffs: {
+	MajorChordBuff: {
+		DisplayName: Major Chord
+		Description: Swift movement from a bright chord
+	}
+}
+
+Projectiles: {
+	SuspendedWaveProjectile.DisplayName: Suspended Wave Projectile
+	MajorNoteProjectile.DisplayName: Major Note Projectile
+	DiminishedOrbProjectile.DisplayName: Diminished Orb Projectile
+	WoodcordSlashProjectile.DisplayName: Woodcord Slash Projectile
+}
