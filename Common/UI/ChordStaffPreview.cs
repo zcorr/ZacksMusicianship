@@ -18,6 +18,18 @@ namespace ZacksMusicianship.Common.UI
 		private const float StaffWidth = 378f;
 		private const float ClefWidth = 58f;
 		private const float ClefPixelScale = 1.8f;
+		private const float ClefVerticalBias = -8f; // visual nudge to seat the glyph on the staff
+
+		private const float HeaderPaddingLeft = 12f;
+		private const float HeaderPaddingTop = 8f;
+		private const float SubheadingOffset = 20f;
+		private const float StaffOffsetFromTop = 54f;
+		private const float HeadingScale = 0.82f;
+		private const float SubheadingScale = 0.7f;
+		private const float EmptyLabelScale = 0.78f;
+
+		private static readonly Color StaffLineColor = new(153, 132, 104);
+		private static readonly Color EmptyLabelColor = new(170, 170, 178);
 
 		private static readonly string[] TrebleClefPixels =
 		{
@@ -56,11 +68,6 @@ namespace ZacksMusicianship.Common.UI
 			".....###............",
 		};
 
-		private static readonly int[] QualityIntervalsMajor = { 0, 4, 7 };
-		private static readonly int[] QualityIntervalsMinor = { 0, 3, 7 };
-		private static readonly int[] QualityIntervalsDiminished = { 0, 3, 6 };
-		private static readonly int[] QualityIntervalsSuspended = { 0, 5, 7 };
-
 		private readonly List<DisplayNote> displayNotes = new();
 		private string headingText = "Treble Staff Preview";
 		private string detailText = "Select up to 3 notes to preview the voicing.";
@@ -80,17 +87,11 @@ namespace ZacksMusicianship.Common.UI
 				displayNotes.Add(ToDisplayNote(midi));
 
 			if (displayNotes.Count == 0)
-			{
 				detailText = "Select up to 3 notes to preview the voicing.";
-			}
 			else if (recognized)
-			{
 				detailText = $"Notes: {ChordMath.GetNotesDisplay(root, quality)}";
-			}
 			else
-			{
-				detailText = $"Selected: {string.Join(", ", displayNotes.Select(note => note.Label))}";
-			}
+				detailText = $"Selected: {string.Join(", ", displayNotes.Select(n => n.Label))}";
 		}
 
 		protected override void DrawSelf(SpriteBatch spriteBatch)
@@ -99,42 +100,60 @@ namespace ZacksMusicianship.Common.UI
 			Rectangle bounds = dimensions.ToRectangle();
 			Texture2D pixel = TextureAssets.MagicPixel.Value;
 
-			Color staffColor = new Color(153, 132, 104);
-			float headerX = bounds.X + 12f;
-			float headerY = bounds.Y + 8f;
 			float blockLeft = bounds.X + (bounds.Width - (StaffWidth + ClefWidth)) * 0.5f;
 			float staffLeft = blockLeft + ClefWidth;
 			float staffRight = staffLeft + StaffWidth;
-			float staffTop = bounds.Y + 54f;
+			float staffTop = bounds.Y + StaffOffsetFromTop;
 			float staffBottom = staffTop + LineSpacing * 4f;
 			float stackX = (staffLeft + staffRight) * 0.5f;
-			float clefWidth = TrebleClefPixels[0].Length * ClefPixelScale;
-			float clefHeight = TrebleClefPixels.Length * ClefPixelScale;
-			Vector2 clefTopLeft = new(
-				blockLeft + (ClefWidth - clefWidth) * 0.5f,
-				staffTop + (LineSpacing * 4f - clefHeight) * 0.5f - 8f);
 
-			Utils.DrawBorderString(spriteBatch, headingText, new Vector2(headerX, headerY), accentColor, 0.82f);
-			Utils.DrawBorderString(spriteBatch, detailText, new Vector2(headerX, headerY + 20f), Color.Silver, 0.7f);
+			Vector2 headerPos = new(bounds.X + HeaderPaddingLeft, bounds.Y + HeaderPaddingTop);
+			Vector2 clefTopLeft = CalculateClefPosition(blockLeft, staffTop);
 
-			DrawTrebleClef(spriteBatch, pixel, clefTopLeft, staffColor);
-
-			for (int lineIndex = 0; lineIndex < 5; lineIndex++)
-			{
-				int y = (int)(staffTop + lineIndex * LineSpacing);
-				spriteBatch.Draw(pixel, new Rectangle((int)staffLeft, y, (int)(staffRight - staffLeft), 2), staffColor);
-			}
+			DrawHeader(spriteBatch, headerPos);
+			DrawTrebleClef(spriteBatch, pixel, clefTopLeft, StaffLineColor);
+			DrawStaffLines(spriteBatch, pixel, staffLeft, staffRight, staffTop);
 
 			if (displayNotes.Count == 0)
 			{
-				Utils.DrawBorderString(spriteBatch, "No notes selected", new Vector2(stackX - 74f, staffTop + 18f), new Color(170, 170, 178), 0.78f);
+				Utils.DrawBorderString(spriteBatch, "No notes selected", new Vector2(stackX - 74f, staffTop + 18f), EmptyLabelColor, EmptyLabelScale);
 				return;
 			}
 
-			List<DrawNoteState> noteStates = BuildDrawStates(stackX, staffBottom);
+			List<DrawNoteState> noteStates = BuildDrawStates(stackX, staffBottom, displayNotes);
+			DrawNoteGroup(spriteBatch, pixel, noteStates, staffBottom);
+		}
+
+		private void DrawHeader(SpriteBatch spriteBatch, Vector2 position)
+		{
+			Utils.DrawBorderString(spriteBatch, headingText, position, accentColor, HeadingScale);
+			Utils.DrawBorderString(spriteBatch, detailText, position + new Vector2(0f, SubheadingOffset), Color.Silver, SubheadingScale);
+		}
+
+		private static Vector2 CalculateClefPosition(float blockLeft, float staffTop)
+		{
+			float clefWidth = TrebleClefPixels[0].Length * ClefPixelScale;
+			float clefHeight = TrebleClefPixels.Length * ClefPixelScale;
+			return new Vector2(
+				blockLeft + (ClefWidth - clefWidth) * 0.5f,
+				staffTop + (LineSpacing * 4f - clefHeight) * 0.5f + ClefVerticalBias);
+		}
+
+		private static void DrawStaffLines(SpriteBatch spriteBatch, Texture2D pixel, float staffLeft, float staffRight, float staffTop)
+		{
+			int lineWidth = (int)(staffRight - staffLeft);
+			for (int lineIndex = 0; lineIndex < 5; lineIndex++)
+			{
+				int y = (int)(staffTop + lineIndex * LineSpacing);
+				spriteBatch.Draw(pixel, new Rectangle((int)staffLeft, y, lineWidth, 2), StaffLineColor);
+			}
+		}
+
+		private void DrawNoteGroup(SpriteBatch spriteBatch, Texture2D pixel, List<DrawNoteState> noteStates, float staffBottom)
+		{
 			foreach (DrawNoteState noteState in noteStates)
 			{
-				DrawLedgerLines(spriteBatch, pixel, noteState, staffBottom, staffColor * 0.85f);
+				DrawLedgerLines(spriteBatch, pixel, noteState, staffBottom, StaffLineColor * 0.85f);
 
 				if (noteState.Note.IsSharp)
 					Utils.DrawBorderString(spriteBatch, "#", new Vector2(noteState.X - 17f, noteState.Y - 10f), Color.White, 0.72f);
@@ -146,17 +165,12 @@ namespace ZacksMusicianship.Common.UI
 
 		private static List<int> BuildRecognizedMidiNotes(int root, ChordQuality quality)
 		{
-			int[] intervals = quality switch
-			{
-				ChordQuality.Major => QualityIntervalsMajor,
-				ChordQuality.Minor => QualityIntervalsMinor,
-				ChordQuality.Diminished => QualityIntervalsDiminished,
-				ChordQuality.Suspended => QualityIntervalsSuspended,
-				_ => QualityIntervalsMajor,
-			};
-
-			int rootMidi = RootMidiBase + ChordMath.NormalizePitchClass(root);
-			return intervals.Select(interval => rootMidi + interval).ToList();
+			int rootPitchClass = ChordMath.NormalizePitchClass(root);
+			int rootMidi = RootMidiBase + rootPitchClass;
+			return ChordMath.GetPitchClasses(root, quality)
+				.Select(pc => rootMidi + (pc - rootPitchClass + 12) % 12)
+				.OrderBy(midi => midi)
+				.ToList();
 		}
 
 		private static List<int> BuildSelectedMidiNotes(bool[] selectedNotes)
@@ -206,7 +220,7 @@ namespace ZacksMusicianship.Common.UI
 		private static List<DrawNoteState> BuildDrawStates(float stackX, float staffBottom, List<DisplayNote> notes)
 		{
 			List<DrawNoteState> states = new();
-			List<DisplayNote> sortedNotes = notes.OrderBy(note => note.StaffOffset).ToList();
+			List<DisplayNote> sortedNotes = notes.OrderBy(n => n.StaffOffset).ToList();
 
 			for (int i = 0; i < sortedNotes.Count; i++)
 			{
@@ -226,8 +240,6 @@ namespace ZacksMusicianship.Common.UI
 
 			return states;
 		}
-
-		private List<DrawNoteState> BuildDrawStates(float stackX, float staffBottom) => BuildDrawStates(stackX, staffBottom, displayNotes);
 
 		private static void DrawLedgerLines(SpriteBatch spriteBatch, Texture2D pixel, DrawNoteState noteState, float staffBottom, Color color)
 		{
