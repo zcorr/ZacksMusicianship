@@ -154,10 +154,10 @@ namespace ZacksMusicianship.Content.Items
 			}
 
 			if (chordPlayer.CadencePrimedThisUse)
-			{
 				ReleaseEncore(player, source, position, velocity, damage, knockback, quality);
-				chordPlayer.ConsumeCadenceCharge(sync: true);
-			}
+
+			chordPlayer.RegisterChordUseForCadence(player, chordPlayer.ChordRoot, quality, sync: true);
+			chordPlayer.AdvanceProgressionAfterUse(sync: true);
 
 			return false;
 		}
@@ -213,9 +213,19 @@ namespace ZacksMusicianship.Content.Items
 			string chordName = ChordMath.GetDisplayName(chordPlayer.ChordRoot, chordPlayer.CurrentQuality);
 
 			tooltips.Add(new TooltipLine(Mod, "CurrentChord",
-				$"Chord: {chordName}  —  {ChordMath.GetDescription(chordPlayer.CurrentQuality)}")
+				chordPlayer.ProgressionCount > 0
+					? $"Current Step: {chordPlayer.ActiveProgressionIndex + 1}/{chordPlayer.ProgressionCount}  —  {chordName}  —  {ChordMath.GetDescription(chordPlayer.CurrentQuality)}"
+					: $"Current Chord: {chordName}  —  {ChordMath.GetDescription(chordPlayer.CurrentQuality)}")
 			{
 				OverrideColor = ChordMath.GetColor(chordPlayer.CurrentQuality)
+			});
+
+			tooltips.Add(new TooltipLine(Mod, "SavedProgression",
+				chordPlayer.ProgressionCount > 0
+					? $"Progression: {chordPlayer.GetProgressionDisplay()}"
+					: "Progression: empty  —  right-click to add up to 4 saved chords")
+			{
+				OverrideColor = chordPlayer.ProgressionCount > 0 ? new Color(214, 214, 230) : Color.Gray
 			});
 
 			tooltips.Add(new TooltipLine(Mod, "CurrentNotes",
@@ -227,13 +237,13 @@ namespace ZacksMusicianship.Content.Items
 			tooltips.Add(new TooltipLine(Mod, "CadenceMeter",
 				chordPlayer.CadenceCharge >= 3
 					? "Cadence: Encore Ready  —  your next strike releases an empowered echo"
-					: $"Cadence: {chordPlayer.CadenceCharge}/3  —  commit strong chord movements to charge Encore")
+					: $"Cadence: {chordPlayer.CadenceCharge}/3  —  release after a 2-4 chord phrase to count one cadence")
 			{
 				OverrideColor = chordPlayer.CadenceCharge >= 3 ? new Color(255, 180, 80) : new Color(150, 230, 210)
 			});
 
 			tooltips.Add(new TooltipLine(Mod, "RightClickHint",
-				"[Right-click to open chord builder]")
+				"[Right-click to edit saved progression]")
 			{
 				OverrideColor = Color.Gray * 0.85f
 			});

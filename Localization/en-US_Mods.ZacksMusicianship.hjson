@@ -5,6 +5,11 @@ Items: {
 		DisplayName: Woodcord
 		Tooltip: ""
 	}
+
+	Songbook: {
+		DisplayName: Songbook
+		Tooltip: ""
+	}
 }
 
 Buffs: {

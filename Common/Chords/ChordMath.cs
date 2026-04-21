@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Terraria.Audio;
 using Terraria.ID;
+using ZacksMusicianship.Common.Cadences;
 
 namespace ZacksMusicianship.Common.Chords
 {
@@ -146,6 +147,34 @@ namespace ZacksMusicianship.Common.Chords
 			}
 
 			cadenceName = string.Empty;
+			return 0;
+		}
+
+		public static int EvaluateProgressionCadenceTotal(IReadOnlyList<int> roots, IReadOnlyList<ChordQuality> qualities, int count, out string summary)
+		{
+			if (count <= 0)
+			{
+				summary = "Build a saved progression to form a cadence phrase.";
+				return 0;
+			}
+
+			if (count == 1)
+			{
+				summary = "Single saved chord: cadence needs a 2-4 chord phrase.";
+				return 0;
+			}
+
+			List<PlayedChord> phrase = new();
+			for (int i = 0; i < count; i++)
+				phrase.Add(new PlayedChord(roots[i], qualities[i]));
+
+			if (CadenceLibrary.TryMatchPhrase(phrase, out CadenceBookEntry entry))
+			{
+				summary = $"Phrase cadence: {entry.Title} +{entry.CadenceGain}. {entry.Summary}";
+				return entry.CadenceGain;
+			}
+
+			summary = "Phrase cadence: no named 2-4 chord cadence detected yet.";
 			return 0;
 		}
 
