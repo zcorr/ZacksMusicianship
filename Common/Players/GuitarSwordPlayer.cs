@@ -5,17 +5,19 @@ using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 using ZacksMusicianship.Common.Cadences;
 using ZacksMusicianship.Common.Chords;
+using ZacksMusicianship.Common.Rhythm;
 
 	namespace ZacksMusicianship.Common.Players
 	{
 		public class GuitarSwordPlayer : ModPlayer
 		{
 			public const int MaxProgressionLength = 4;
-			private const int CadenceSessionGapTicks = 32;
+			private const int StrumSessionGapTicks = 32;
 
 			private readonly int[] progressionRoots = new int[MaxProgressionLength];
 			private readonly ChordQuality[] progressionQualities = new ChordQuality[MaxProgressionLength];
 			private readonly List<PlayedChord> heldCadencePhrase = new();
+			private int activeStrumPatternIndex = StrumPatternLibrary.DefaultPatternIndex;
 
 			public int ProgressionCount { get; private set; }
 			public int ActiveProgressionIndex { get; private set; }
@@ -26,9 +28,15 @@ using ZacksMusicianship.Common.Chords;
 				? progressionQualities[Utils.Clamp(ActiveProgressionIndex, 0, ProgressionCount - 1)]
 				: ChordQuality.Major;
 			public int CadenceCharge { get; private set; }
+			public int ActiveStrumPatternIndex => activeStrumPatternIndex;
+			public int ActiveStrumStepIndex { get; private set; }
+			public StrumPattern CurrentStrumPattern => StrumPatternLibrary.GetPattern(activeStrumPatternIndex);
+			public StrumStroke CurrentStrumStroke => CurrentStrumPattern.GetStroke(ActiveStrumStepIndex);
+			public int CurrentStrumSubdivisionSpan => CurrentStrumPattern.GetSubdivisionSpanAfter(ActiveStrumStepIndex);
 
 			internal bool CadencePrimedThisUse { get; private set; }
-			private long lastCadencePhraseUseTick;
+			private long lastStrumUseTick;
+			private bool strumSessionActive;
 			private bool cadenceSessionActive;
 
 			public override void Initialize()
@@ -55,6 +63,12 @@ using ZacksMusicianship.Common.Chords;
 
 				if (ActiveProgressionIndex > 0)
 					tag["ActiveProgressionIndex"] = ActiveProgressionIndex;
+
+				if (ActiveStrumPatternIndex != StrumPatternLibrary.DefaultPatternIndex)
+					tag["ActiveStrumPatternIndex"] = ActiveStrumPatternIndex;
+
+				if (ActiveStrumStepIndex > 0)
+					tag["ActiveStrumStepIndex"] = ActiveStrumStepIndex;
 
 				if (CadenceCharge > 0)
 					tag["CadenceCharge"] = CadenceCharge;
@@ -89,6 +103,13 @@ using ZacksMusicianship.Common.Chords;
 					ActiveProgressionIndex = 0;
 				}
 
+				activeStrumPatternIndex = tag.ContainsKey("ActiveStrumPatternIndex")
+					? StrumPatternLibrary.NormalizePatternIndex(tag.GetInt("ActiveStrumPatternIndex"))
+					: StrumPatternLibrary.DefaultPatternIndex;
+				ActiveStrumStepIndex = Utils.Clamp(
+					tag.ContainsKey("ActiveStrumStepIndex") ? tag.GetInt("ActiveStrumStepIndex") : 0,
+					0,
+					CurrentStrumPattern.StepCount - 1);
 				CadenceCharge = tag.ContainsKey("CadenceCharge") ? Utils.Clamp(tag.GetInt("CadenceCharge"), 0, 3) : 0;
 				CadencePrimedThisUse = false;
 			}
@@ -97,15 +118,16 @@ using ZacksMusicianship.Common.Chords;
 
 			public override void PostUpdate()
 			{
-				if (!cadenceSessionActive)
+				if (!strumSessionActive && !cadenceSessionActive)
 					return;
 
 				bool localRelease = Player.whoAmI == Main.myPlayer && !Player.controlUseItem;
 				bool itemChanged = Player.HeldItem == null || Player.HeldItem.type != ModContent.ItemType<Content.Items.Woodcord>();
-				bool timedOut = Main.GameUpdateCount - lastCadencePhraseUseTick > CadenceSessionGapTicks;
+				bool activelyUsingWoodcord = !itemChanged && (Player.itemAnimation > 0 || (Player.whoAmI == Main.myPlayer && Player.controlUseItem));
+				bool timedOut = !activelyUsingWoodcord && Main.GameUpdateCount - lastStrumUseTick > StrumSessionGapTicks;
 
 				if (Player.dead || !Player.active || localRelease || itemChanged || timedOut)
-					FinalizeCadencePhrase(sync: true);
+					FinalizePerformanceSession(sync: true);
 			}
 
 			public bool TryGetProgressionChord(int slot, out int root, out ChordQuality quality)
@@ -132,6 +154,19 @@ using ZacksMusicianship.Common.Chords;
 					steps.Add(ChordMath.GetDisplayName(progressionRoots[i], progressionQualities[i]));
 
 				return string.Join(separator, steps);
+			}
+
+			public int GetSlowestProgressionUseTime(System.Func<ChordQuality, int> getUseTime)
+			{
+				if (getUseTime == null)
+					return 1;
+
+				int slowestUseTime = System.Math.Max(1, getUseTime(CurrentQuality));
+
+				for (int i = 0; i < ProgressionCount; i++)
+					slowestUseTime = System.Math.Max(slowestUseTime, getUseTime(progressionQualities[i]));
+
+				return slowestUseTime;
 			}
 
 			public bool TryAddChordToProgression(int root, ChordQuality quality, bool sync, out int slotIndex, out bool progressionComplete)
@@ -185,10 +220,16 @@ using ZacksMusicianship.Common.Chords;
 				return CadencePrimedThisUse;
 			}
 
+			public void RegisterStrumUse()
+			{
+				strumSessionActive = true;
+				lastStrumUseTick = Main.GameUpdateCount;
+			}
+
 			public void RegisterChordUseForCadence(Player player, int root, ChordQuality quality, bool sync)
 			{
+				RegisterStrumUse();
 				cadenceSessionActive = true;
-				lastCadencePhraseUseTick = Main.GameUpdateCount;
 
 				if (heldCadencePhrase.Count >= MaxProgressionLength)
 					return;
@@ -196,29 +237,41 @@ using ZacksMusicianship.Common.Chords;
 				heldCadencePhrase.Add(new PlayedChord(root, quality));
 			}
 
-			public void AdvanceProgressionAfterUse(bool sync)
+			public bool AdvanceStrumPatternAfterUse(bool sync)
 			{
 				if (CadencePrimedThisUse)
 					CadenceCharge = 0;
 
 				CadencePrimedThisUse = false;
+				bool patternComplete = AdvanceStrumStep();
 
-				if (ProgressionCount > 1)
-				{
-					int currentIndex = ActiveProgressionIndex;
-					int nextIndex = (currentIndex + 1) % ProgressionCount;
-					ActiveProgressionIndex = nextIndex;
-				}
-				else
-				{
-					ActiveProgressionIndex = 0;
-				}
+				if (patternComplete)
+					AdvanceProgressionIndex();
+
+				if (sync && Main.netMode != NetmodeID.SinglePlayer)
+					SendProgressionPacket();
+
+				return patternComplete;
+			}
+
+			public void SetStrumPattern(int patternIndex, bool sync)
+			{
+				int normalizedPatternIndex = StrumPatternLibrary.NormalizePatternIndex(patternIndex);
+
+				if (activeStrumPatternIndex == normalizedPatternIndex && ActiveStrumStepIndex == 0)
+					return;
+
+				activeStrumPatternIndex = normalizedPatternIndex;
+				ActiveStrumStepIndex = 0;
+				ClearStrumSession();
+				ClearCadencePhraseSession();
 
 				if (sync && Main.netMode != NetmodeID.SinglePlayer)
 					SendProgressionPacket();
 			}
 
-			internal void ApplySyncedProgressionState(int progressionCount, int activeIndex, int cadenceCharge, int[] roots, ChordQuality[] qualities)
+			internal void ApplySyncedProgressionState(int progressionCount, int activeIndex, int activeStrumPatternIndex,
+				int activeStrumStepIndex, int cadenceCharge, int[] roots, ChordQuality[] qualities)
 			{
 				ResetState();
 				ProgressionCount = Utils.Clamp(progressionCount, 0, MaxProgressionLength);
@@ -230,6 +283,8 @@ using ZacksMusicianship.Common.Chords;
 				}
 
 				ActiveProgressionIndex = ProgressionCount == 0 ? 0 : Utils.Clamp(activeIndex, 0, ProgressionCount - 1);
+				this.activeStrumPatternIndex = StrumPatternLibrary.NormalizePatternIndex(activeStrumPatternIndex);
+				ActiveStrumStepIndex = Utils.Clamp(activeStrumStepIndex, 0, CurrentStrumPattern.StepCount - 1);
 				CadenceCharge = Utils.Clamp(cadenceCharge, 0, 3);
 				CadencePrimedThisUse = false;
 			}
@@ -237,8 +292,10 @@ using ZacksMusicianship.Common.Chords;
 			private void ResetEditedProgressionState()
 			{
 				ActiveProgressionIndex = 0;
+				ActiveStrumStepIndex = 0;
 				CadenceCharge = 0;
 				CadencePrimedThisUse = false;
+				ClearStrumSession();
 				ClearCadencePhraseSession();
 			}
 
@@ -252,17 +309,47 @@ using ZacksMusicianship.Common.Chords;
 
 				ProgressionCount = 0;
 				ActiveProgressionIndex = 0;
+				activeStrumPatternIndex = StrumPatternLibrary.DefaultPatternIndex;
+				ActiveStrumStepIndex = 0;
 				CadenceCharge = 0;
 				CadencePrimedThisUse = false;
+				ClearStrumSession();
 				ClearCadencePhraseSession();
 			}
 
-			private void FinalizeCadencePhrase(bool sync)
+			private bool AdvanceStrumStep()
 			{
-				if (!cadenceSessionActive)
+				StrumPattern pattern = CurrentStrumPattern;
+				int currentStep = Utils.Clamp(ActiveStrumStepIndex, 0, pattern.StepCount - 1);
+				int nextStep = currentStep + 1;
+				bool patternComplete = nextStep >= pattern.StepCount;
+
+				ActiveStrumStepIndex = patternComplete ? 0 : nextStep;
+				return patternComplete;
+			}
+
+			private void AdvanceProgressionIndex()
+			{
+				if (ProgressionCount > 1)
+				{
+					int currentIndex = ActiveProgressionIndex;
+					int nextIndex = (currentIndex + 1) % ProgressionCount;
+					ActiveProgressionIndex = nextIndex;
+				}
+				else
+				{
+					ActiveProgressionIndex = 0;
+				}
+			}
+
+			private void FinalizePerformanceSession(bool sync)
+			{
+				if (!strumSessionActive && !cadenceSessionActive)
 					return;
 
 				ActiveProgressionIndex = 0;
+				ActiveStrumStepIndex = 0;
+				ClearStrumSession();
 
 				if (heldCadencePhrase.Count >= 2 && CadenceLibrary.TryMatchPhrase(heldCadencePhrase, out CadenceBookEntry entry))
 				{
@@ -290,8 +377,13 @@ using ZacksMusicianship.Common.Chords;
 			private void ClearCadencePhraseSession()
 			{
 				heldCadencePhrase.Clear();
-				lastCadencePhraseUseTick = 0;
 				cadenceSessionActive = false;
+			}
+
+			private void ClearStrumSession()
+			{
+				lastStrumUseTick = 0;
+				strumSessionActive = false;
 			}
 
 			private void SendProgressionPacket(int toWho = -1, int fromWho = -1)
@@ -304,6 +396,8 @@ using ZacksMusicianship.Common.Chords;
 				packet.Write((byte)Player.whoAmI);
 				packet.Write((byte)ProgressionCount);
 				packet.Write((byte)ActiveProgressionIndex);
+				packet.Write((byte)ActiveStrumPatternIndex);
+				packet.Write((byte)ActiveStrumStepIndex);
 				packet.Write((byte)CadenceCharge);
 
 				for (int i = 0; i < MaxProgressionLength; i++)

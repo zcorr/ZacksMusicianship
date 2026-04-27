@@ -8,6 +8,7 @@ using Terraria.ModLoader;
 using ZacksMusicianship.Common.Chords;
 using ZacksMusicianship.Common.NPCs;
 using ZacksMusicianship.Common.Players;
+using ZacksMusicianship.Common.Rhythm;
 using ZacksMusicianship.Common.Systems;
 using ZacksMusicianship.Content.Buffs;
 using ZacksMusicianship.Content.Projectiles;
@@ -19,6 +20,20 @@ namespace ZacksMusicianship.Content.Items
 		private const int BaseDamage = 9;
 		private const int BaseUseTime = 19;
 		private const float BaseKnock = 4f;
+
+		private readonly struct ChordModeStats
+		{
+			public ChordModeStats(int damage, int useTime, float knockBack)
+			{
+				Damage = damage;
+				UseTime = useTime;
+				KnockBack = knockBack;
+			}
+
+			public int Damage { get; }
+			public int UseTime { get; }
+			public float KnockBack { get; }
+		}
 
 		public override void SetDefaults()
 		{
@@ -59,29 +74,11 @@ namespace ZacksMusicianship.Content.Items
 			ChordQuality quality = chordPlayer.CurrentQuality;
 			bool encoreThisUse = chordPlayer.PrepareCadenceUse();
 
-			switch (quality)
-			{
-				case ChordQuality.Major:
-					Item.damage = 6;
-					Item.useTime = 16;
-					Item.useAnimation = 16;
-					Item.knockBack = 2f;
-					break;
-
-				case ChordQuality.Minor:
-					Item.damage = 14;
-					Item.useTime = 26;
-					Item.useAnimation = 26;
-					Item.knockBack = 8f;
-					break;
-
-				default:
-					Item.damage = BaseDamage;
-					Item.useTime = BaseUseTime;
-					Item.useAnimation = BaseUseTime;
-					Item.knockBack = BaseKnock;
-					break;
-			}
+			ChordModeStats modeStats = GetModeStats(quality);
+			Item.damage = modeStats.Damage;
+			Item.knockBack = modeStats.KnockBack;
+			Item.useTime = GetStrumAdjustedUseTime(chordPlayer, chordPlayer.GetSlowestProgressionUseTime(GetModeUseTime));
+			Item.useAnimation = Item.useTime;
 
 			if (encoreThisUse)
 			{
@@ -100,7 +97,8 @@ namespace ZacksMusicianship.Content.Items
 			if (Main.myPlayer == player.whoAmI)
 			{
 				GuitarSwordPlayer chordPlayer = player.GetModPlayer<GuitarSwordPlayer>();
-				SoundEngine.PlaySound(ChordMath.GetSoundStyle(chordPlayer.ChordRoot, chordPlayer.CurrentQuality), player.Center);
+				SoundEngine.PlaySound(GetStrumSoundStyle(chordPlayer.ChordRoot, chordPlayer.CurrentQuality,
+					chordPlayer.CurrentStrumStroke.Direction), player.Center);
 
 				if (chordPlayer.CadencePrimedThisUse)
 					CombatText.NewText(player.Hitbox, new Color(255, 180, 80), "Encore!", dramatic: true);
@@ -116,14 +114,16 @@ namespace ZacksMusicianship.Content.Items
 				return false;
 
 			GuitarSwordPlayer chordPlayer = player.GetModPlayer<GuitarSwordPlayer>();
+			int root = chordPlayer.ChordRoot;
 			ChordQuality quality = chordPlayer.CurrentQuality;
+			StrumStroke strumStroke = chordPlayer.CurrentStrumStroke;
 
 			if (velocity == Vector2.Zero)
 				velocity = new Vector2(player.direction, 0f);
 
 			Projectile.NewProjectile(source, player.MountedCenter, velocity.SafeNormalize(Vector2.UnitX * player.direction),
 				ModContent.ProjectileType<WoodcordSlashProjectile>(), damage, knockback, player.whoAmI,
-				(float)quality);
+				(float)quality, (float)strumStroke.Direction);
 
 			switch (quality)
 			{
@@ -156,8 +156,11 @@ namespace ZacksMusicianship.Content.Items
 			if (chordPlayer.CadencePrimedThisUse)
 				ReleaseEncore(player, source, position, velocity, damage, knockback, quality);
 
-			chordPlayer.RegisterChordUseForCadence(player, chordPlayer.ChordRoot, quality, sync: true);
-			chordPlayer.AdvanceProgressionAfterUse(sync: true);
+			chordPlayer.RegisterStrumUse();
+			bool completedPattern = chordPlayer.AdvanceStrumPatternAfterUse(sync: true);
+
+			if (completedPattern)
+				chordPlayer.RegisterChordUseForCadence(player, root, quality, sync: true);
 
 			return false;
 		}
@@ -211,6 +214,9 @@ namespace ZacksMusicianship.Content.Items
 		{
 			GuitarSwordPlayer chordPlayer = Main.LocalPlayer.GetModPlayer<GuitarSwordPlayer>();
 			string chordName = ChordMath.GetDisplayName(chordPlayer.ChordRoot, chordPlayer.CurrentQuality);
+			StrumPattern strumPattern = chordPlayer.CurrentStrumPattern;
+			StrumStroke strumStroke = chordPlayer.CurrentStrumStroke;
+			int strumTempoUseTime = chordPlayer.GetSlowestProgressionUseTime(GetModeUseTime);
 
 			tooltips.Add(new TooltipLine(Mod, "CurrentChord",
 				chordPlayer.ProgressionCount > 0
@@ -226,6 +232,26 @@ namespace ZacksMusicianship.Content.Items
 					: "Progression: empty  —  right-click to add up to 4 saved chords")
 			{
 				OverrideColor = chordPlayer.ProgressionCount > 0 ? new Color(214, 214, 230) : Color.Gray
+			});
+
+			tooltips.Add(new TooltipLine(Mod, "StrumPattern",
+				$"Strum: {strumPattern.DisplayName} ({strumPattern.GetDirectionDisplay()})  —  next {strumStroke.DirectionLabel} on {strumStroke.BeatLabel} ({chordPlayer.ActiveStrumStepIndex + 1}/{strumPattern.StepCount})")
+			{
+				OverrideColor = new Color(190, 220, 255)
+			});
+
+			tooltips.Add(new TooltipLine(Mod, "StrumBeats",
+				$"Strum beats: {strumPattern.GetBeatDisplay()}  —  chord changes after the pattern")
+			{
+				OverrideColor = Color.Gray * 0.9f
+			});
+
+			tooltips.Add(new TooltipLine(Mod, "StrumTempo",
+				chordPlayer.ProgressionCount > 1
+					? $"Strum tempo: locked to slowest saved chord ({strumTempoUseTime} base ticks)"
+					: $"Strum tempo: {strumTempoUseTime} base ticks")
+			{
+				OverrideColor = Color.Gray * 0.9f
 			});
 
 			tooltips.Add(new TooltipLine(Mod, "CurrentNotes",
@@ -262,6 +288,37 @@ namespace ZacksMusicianship.Content.Items
 				.AddIngredient(ItemID.Wood, 8)
 				.AddTile(TileID.Anvils)
 				.Register();
+		}
+
+		private static int GetStrumAdjustedUseTime(GuitarSwordPlayer chordPlayer, int baseUseTime)
+		{
+			StrumPattern pattern = chordPlayer.CurrentStrumPattern;
+			int span = chordPlayer.CurrentStrumSubdivisionSpan;
+			int duration = (int)System.Math.Round(baseUseTime * pattern.StepCount * span / (float)pattern.SubdivisionCount);
+
+			return System.Math.Max(6, duration);
+		}
+
+		private static ChordModeStats GetModeStats(ChordQuality quality)
+		{
+			return quality switch
+			{
+				ChordQuality.Major => new ChordModeStats(6, 16, 2f),
+				ChordQuality.Minor => new ChordModeStats(14, 26, 8f),
+				_ => new ChordModeStats(BaseDamage, BaseUseTime, BaseKnock),
+			};
+		}
+
+		private static int GetModeUseTime(ChordQuality quality) => GetModeStats(quality).UseTime;
+
+		private static SoundStyle GetStrumSoundStyle(int root, ChordQuality quality, StrumDirection direction)
+		{
+			SoundStyle soundStyle = ChordMath.GetSoundStyle(root, quality);
+
+			if (direction == StrumDirection.Up)
+				soundStyle.Volume *= 0.72f;
+
+			return soundStyle;
 		}
 
 		private void ReleaseEncore(Player player, EntitySource_ItemUse_WithAmmo source, Vector2 position, Vector2 velocity,

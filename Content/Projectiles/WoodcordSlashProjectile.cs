@@ -10,6 +10,7 @@ using Terraria.ModLoader;
 using ZacksMusicianship.Common.Chords;
 using ZacksMusicianship.Common.NPCs;
 using ZacksMusicianship.Common.Players;
+using ZacksMusicianship.Common.Rhythm;
 using ZacksMusicianship.Content.Buffs;
 
 namespace ZacksMusicianship.Content.Projectiles
@@ -17,6 +18,7 @@ namespace ZacksMusicianship.Content.Projectiles
 	public class WoodcordSlashProjectile : ModProjectile
 	{
 		private ChordQuality Quality => (ChordQuality)(int)Projectile.ai[0];
+		private StrumDirection StrokeDirection => (StrumDirection)(int)Projectile.ai[1];
 
 		private ref float Initialized => ref Projectile.localAI[0];
 		private ref float BaseRotation => ref Projectile.localAI[1];
@@ -173,7 +175,9 @@ namespace ZacksMusicianship.Content.Projectiles
 
 		private float GetSlashRotation(Player player, float progress)
 		{
-			float sweep = MathHelper.Lerp(-1.2f, 1.05f, progress) * player.direction;
+			float start = StrokeDirection == StrumDirection.Up ? 1.05f : -1.2f;
+			float end = StrokeDirection == StrumDirection.Up ? -1.2f : 1.05f;
+			float sweep = MathHelper.Lerp(start, end, progress) * player.direction;
 			return BaseRotation + sweep * 0.92f;
 		}
 

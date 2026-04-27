@@ -90,7 +90,7 @@ namespace ZacksMusicianship.Common.UI
 			panel.Append(title);
 			cursorY += 34f;
 
-			WrappedTextBlock instructions = new("Pick exactly 3 notes. Save up to 4 chords, then the weapon rotates through that progression.", 0.78f);
+			WrappedTextBlock instructions = new("Pick exactly 3 notes. Save up to 4 chords, then Woodcord advances to the next chord after each full strum pattern.", 0.78f);
 			instructions.Width.Set(ContentWidth, 0f);
 			instructions.Height.Set(24f, 0f);
 			instructions.Left.Set(OuterPadding, 0f);

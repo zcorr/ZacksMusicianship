@@ -24,6 +24,8 @@ namespace ZacksMusicianship
 					int playerIndex = reader.ReadByte();
 					int progressionCount = reader.ReadByte();
 					int activeIndex = reader.ReadByte();
+					int activeStrumPatternIndex = reader.ReadByte();
+					int activeStrumStepIndex = reader.ReadByte();
 					int cadenceCharge = reader.ReadByte();
 					int[] roots = new int[GuitarSwordPlayer.MaxProgressionLength];
 					ChordQuality[] qualities = new ChordQuality[GuitarSwordPlayer.MaxProgressionLength];
@@ -38,7 +40,8 @@ namespace ZacksMusicianship
 						return;
 
 					GuitarSwordPlayer chordPlayer = Main.player[playerIndex].GetModPlayer<GuitarSwordPlayer>();
-					chordPlayer.ApplySyncedProgressionState(progressionCount, activeIndex, cadenceCharge, roots, qualities);
+					chordPlayer.ApplySyncedProgressionState(progressionCount, activeIndex, activeStrumPatternIndex, activeStrumStepIndex,
+						cadenceCharge, roots, qualities);
 
 					if (Main.netMode == NetmodeID.Server)
 					{
@@ -47,6 +50,8 @@ namespace ZacksMusicianship
 						packet.Write((byte)playerIndex);
 						packet.Write((byte)progressionCount);
 						packet.Write((byte)activeIndex);
+						packet.Write((byte)activeStrumPatternIndex);
+						packet.Write((byte)activeStrumStepIndex);
 						packet.Write((byte)cadenceCharge);
 
 						for (int i = 0; i < GuitarSwordPlayer.MaxProgressionLength; i++)
