@@ -18,7 +18,7 @@ namespace ZacksMusicianship.Content.Items
 	public class Woodcord : ModItem
 	{
 		private const int BaseDamage = 9;
-		private const int BaseUseTime = 19;
+		private const int BaseUseTime = 15;
 		private const float BaseKnock = 4f;
 
 		private readonly struct ChordModeStats
@@ -303,8 +303,8 @@ namespace ZacksMusicianship.Content.Items
 		{
 			return quality switch
 			{
-				ChordQuality.Major => new ChordModeStats(6, 16, 2f),
-				ChordQuality.Minor => new ChordModeStats(14, 26, 8f),
+				ChordQuality.Major => new ChordModeStats(6, 13, 2f),
+				ChordQuality.Minor => new ChordModeStats(14, 20, 8f),
 				_ => new ChordModeStats(BaseDamage, BaseUseTime, BaseKnock),
 			};
 		}
